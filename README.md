@@ -1,3 +1,5 @@
+Refer to
+https://github.com/karpathy/nanoGPT
 
 # nanoGPT
 
