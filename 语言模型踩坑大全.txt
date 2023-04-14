@@ -1,0 +1,40 @@
+语言模型踩坑大全：
+1.ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+torch.amp.autocast报错，根本不认amp,这是由于我这里torch的版本更高，换成torch.cuda.amp.autocast即可
+device_type=device_type报错，应该是我这里的pytorch的版本更高，已经可以不用这个参数了，删掉即可
+改成：ctx = nullcontext() if device_type == 'cpu' else torch.cuda.amp.autocast(dtype=ptdtype)
+以上问题train.py和sample.py都改,sample.py负责推理，展示聊天推理结果，一次可以展示10个推理变种
+
+2.dtype = 'bfloat16'，应该是我这里显卡不支持bfloat,改成float即可
+改成：dtype = 'bfloat16'
+train.py和sample.py都改
+
+3.train.py负责训练，生成out/ckpt.pt模型文件，
+train.py需要预制的train.bin和val.bin才能训练，这两个文件要想运行prepare.py从网站下载65G的英文文本语料，没法下载经常断线
+于是我修改了prepare.py，从本地data/openwebtext/文件夹里的读取文本，转换成train.bin和val.bin
+
+4.训练时显示加载样本数组下标为负值：
+预制训练文件长度不够，不够blocksize，就无法获取下文gt数据导致错误
+解决方案：寻找较长的文本，重新运行prepare.py得到train.bin和val.bin
+
+5.训练过程中老显示Out of memory
+按如下方式把模型改小即可！#后面的是原始模型配置，改小
+# data
+batch_size = 4#12 # if gradient_accumulation_steps > 1, this is the micro-batch size
+block_size = 512#1024
+# model
+n_layer = 8#12
+n_head = 8#12
+n_embd = 640#768
+
+6.训练过程中接续训练应该改为'resume'模式，我为避免每次改来改去，我加了一行判断是否已有训练模型，如果有就自动接续
+# model init
+model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
+                  bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+if os.path.exists(ckpt_path):
+    init_from = 'resume'
+if init_from == 'scratch':
+......
+
+7.昨天吃晚饭期间小小高还通过chatgpt改了几个bugs，可能还需要问问他。。。。
